@@ -26,6 +26,9 @@
 #include "../elemwise_op_common.h"
 #include "../operator_common.h"
 #include "adaptive_avg_pooling-inl.h"
+#if MXNET_USE_MKLDNN == 1
+#include "../nn/mkldnn/mkldnn_pooling-inl.h"
+#endif  // MXNET_USE_MKLDNN
 
 #define START_IND(a, b, c) static_cast<int>(std::floor(static_cast<float>(a * c) / b))
 #define END_IND(a, b, c) static_cast<int>(std::ceil(static_cast<float>((a + 1) * c) / b))
@@ -167,11 +170,62 @@ num_threads(engine::OpenMP::Get()->GetRecommendedOMPThreadCount())
   }
 }
 
+#if MXNET_USE_MKLDNN == 1
+void AdaptiveAvgPoolOpBackwardExCPU(const nnvm::NodeAttrs& attrs,
+                                    const OpContext& ctx,
+                                    const std::vector<NDArray>& inputs,
+                                    const std::vector<OpReqType>& req,
+                                    const std::vector<NDArray>& outputs) {
+  const PoolingParam& param = nnvm::get<PoolingParam>(attrs.parsed);
 
-template<typename xpu, typename DType, typename AccReal>
-void AdaptiveAvgPoolUpdateGradInput(mshadow::Stream<cpu> *s,
-                                              const std::vector<TBlob> &input,
-                                              const std::vector<TBlob> &output) {
+  // Pooling does not currently support working with views
+  if (inputs[0].IsView() || outputs[0].IsView()) {
+    FallBackCompute(PoolingGradCompute<cpu>, attrs, ctx, inputs, req, outputs);
+    return;
+  }
+
+  if (SupportMKLDNNPooling(param, inputs[0])) {
+    const NDArray& out_grad  = inputs[0];
+    const NDArray* workspace = nullptr;
+    const NDArray* in_data   = nullptr;
+    if (MKLDNNRequireWorkspace(param)) {
+      // The first two elements are the gradient of the outputs in forward.
+      // The third is the input of forward.
+      // The fourth and the fifth are the outputs of forward.
+      CHECK_EQ(inputs.size(), 5U);
+      in_data   = &inputs[2];
+      workspace = &inputs[4];
+    } else {
+      CHECK_EQ(inputs.size(), 3U);
+      in_data = &inputs[1];
+    }
+    const NDArray& in_grad = outputs[0];
+    MKLDNN_OPCHECK_INIT(true, outputs.size(), inputs, outputs);
+    MKLDNNPoolingGradCompute(ctx, param, out_grad, *in_data, workspace, req[0], in_grad, true);
+    MKLDNN_OPCHECK_RUN(AdaptiveAvgPoolOpBackward<cpu>, attrs, ctx, inputs, req, outputs);
+    return;
+  }
+  FallBackCompute(AdaptiveAvgPoolOpBackward<cpu>, attrs, ctx, inputs, req, outputs);
+}
+
+inline static bool BackwardPoolingStorageType(const nnvm::NodeAttrs& attrs,
+                                              const int dev_mask,
+                                              DispatchMode* dispatch_mode,
+                                              std::vector<int>* in_attrs,
+                                              std::vector<int>* out_attrs) {
+  const PoolingParam& param = nnvm::get<PoolingParam>(attrs.parsed);
+  CHECK_EQ(in_attrs->size(), GetNumBackInputs(param));
+  CHECK_EQ(out_attrs->size(), 1);
+  bool support_mkldnn_pool = SupportMKLDNNPooling(param);
+
+  return MKLDNNStorageType(
+      attrs, dev_mask, support_mkldnn_pool, dispatch_mode, in_attrs, out_attrs);
+}
+#endif
+template <typename xpu, typename DType, typename AccReal>
+void AdaptiveAvgPoolUpdateGradInput(mshadow::Stream<cpu>* s,
+                                    const std::vector<TBlob>& input,
+                                    const std::vector<TBlob>& output) {
   Tensor<xpu, 4, DType> gradOut = input[0].get<xpu, 4, DType>(s);
   Tensor<xpu, 4, DType> gradIn = output[0].get<xpu, 4, DType>(s);
 
@@ -240,12 +294,12 @@ void AdaptiveAvgPoolComputeExCPU(const nnvm::NodeAttrs &attrs,
   */
   if (SupportMKLDNN(inputs[0]) &&
       SupportMKLDNNAveragePooling(inputs[0], outputs[0])) {
-    const AdaptiveAvgPoolParam &param =
-        nnvm::get<AdaptiveAvgPoolParam>(attrs.parsed);
+    const PoolingParam &param = nnvm::get<PoolingParam>(attrs.parsed); 
+        
     const NDArray *workspace = nullptr;
     MKLDNN_OPCHECK_INIT(false, 1, inputs, outputs);
-    MKLDNNAdaptivePoolingCompute(ctx, param, inputs[0], req[0], outputs[0],
-                                 workspace);
+    MKLDNNPoolingCompute(ctx, param, inputs[0], req[0], outputs[0], workspace, true);
+    MKLDNN_OPCHECK_RUN(PoolingCompute<cpu>, attrs, ctx, inputs, req, outputs);
     return;
   }
   FallBackCompute(AdaptiveAvgPoolOpForward<cpu>, attrs, ctx, inputs, req,
@@ -283,8 +337,6 @@ inline static bool AdaptivePoolingStorageType(const nnvm::NodeAttrs &attrs,
 }
 
 
-DMLC_REGISTER_PARAMETER(AdaptiveAvgPoolParam);
-
 NNVM_REGISTER_OP(_contrib_AdaptiveAvgPooling2D)
 .describe(R"code(
 Applies a 2D adaptive average pooling over a 4D input with the shape of (NCHW).
@@ -297,7 +349,7 @@ The pooling kernel and stride sizes are automatically chosen for desired output 
   (N x C x height x width) for any input (NCHW).
 
 )code" ADD_FILELINE)
-.set_attr_parser(ParamParser<AdaptiveAvgPoolParam>)
+.set_attr_parser(ParamParser<PoolingParam>)
 .set_num_inputs(1)
 .set_num_outputs(1)
 .set_attr<mxnet::FInferShape>("FInferShape", AdaptiveAvgPoolOpInferShape)
@@ -310,15 +362,37 @@ The pooling kernel and stride sizes are automatically chosen for desired output 
 .set_attr<FComputeEx>("FComputeEx<cpu>",  AdaptiveAvgPoolComputeExCPU)
 #endif
 .add_argument("data", "NDArray-or-Symbol", "Input data")
-.add_arguments(AdaptiveAvgPoolParam::__FIELDS__());
+.add_arguments(PoolingParam::__FIELDS__());
 
 NNVM_REGISTER_OP(_backward_contrib_AdaptiveAvgPooling2D)
-.set_attr_parser(ParamParser<AdaptiveAvgPoolParam>)
-.set_num_inputs(1)
-.set_num_outputs(1)
-.set_attr<nnvm::TIsBackward>("TIsBackward", true)
-.set_attr<FCompute>("FCompute<cpu>", AdaptiveAvgPoolOpBackward<cpu>);
-
+    .set_num_inputs(1)
+    .set_num_outputs(1)
+    .set_attr<nnvm::TIsBackward>("TIsBackward", true)
+    .set_attr<nnvm::FInplaceOption>("FInplaceOption",
+                                    [](const NodeAttrs& attrs) {
+// Different backend requires different FInplaceOption
+#if MXNET_USE_MKLDNN == 1
+                                      const PoolingParam& param =
+                                          nnvm::get<PoolingParam>(attrs.parsed);
+                                      if (MKLDNNRequireWorkspace(param) &&
+                                          SupportMKLDNNPooling(param))
+                                        return std::vector<std::pair<int, int> >{{1, 0}};
+#endif
+                                      return std::vector<std::pair<int, int> >();
+                                    })
+#if MXNET_USE_MKLDNN == 1
+    .set_attr<FResourceRequest>("FResourceRequest",
+                                [](const NodeAttrs& n) {
+                                  return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
+                                })
+    .set_attr<FInferStorageType>("FInferStorageType", BackwardPoolingStorageType)
+#endif
+    .set_attr_parser(ParamParser<PoolingParam>)
+#if MXNET_USE_MKLDNN == 1
+    .set_attr<bool>("TIsMKLDNN", true)
+    .set_attr<FComputeEx>("FComputeEx<cpu>", AdaptiveAvgPoolOpBackwardExCPU)
+#endif
+    .set_attr<FCompute>("FCompute<cpu>", AdaptiveAvgPoolOpBackward<cpu>);
 
 }  // namespace op
 }  // namespace mxnet

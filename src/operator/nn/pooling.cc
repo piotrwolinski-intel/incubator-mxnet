@@ -268,7 +268,8 @@ static bool PoolingShape(const nnvm::NodeAttrs &attrs,
 }
 
 #if MXNET_USE_MKLDNN == 1
-void PoolingComputeExCPU(const nnvm::NodeAttrs &attrs, const OpContext &ctx,
+void PoolingComputeExCPU(const nnvm::NodeAttrs &attrs, 
+                         const OpContext &ctx,
                          const std::vector<NDArray> &inputs,
                          const std::vector<OpReqType> &req,
                          const std::vector<NDArray> &outputs) {
@@ -287,7 +288,7 @@ void PoolingComputeExCPU(const nnvm::NodeAttrs &attrs, const OpContext &ctx,
       workspace = &outputs[1];
     }
     MKLDNN_OPCHECK_INIT(false, 1, inputs, outputs);
-    MKLDNNPoolingCompute(ctx, param, inputs[0], req[0], outputs[0], workspace);
+    MKLDNNPoolingCompute(ctx, param, inputs[0], req[0], outputs[0], workspace, false);
     MKLDNN_OPCHECK_RUN(PoolingCompute<cpu>, attrs, ctx, inputs, req, outputs);
     return;
   }
@@ -324,10 +325,8 @@ void PoolingGradComputeExCPU(const nnvm::NodeAttrs &attrs, const OpContext &ctx,
     }
     const NDArray &in_grad = outputs[0];
     MKLDNN_OPCHECK_INIT(true, outputs.size(), inputs, outputs);
-    MKLDNNPoolingGradCompute(ctx, param, out_grad, *in_data, workspace,
-                             req[0], in_grad);
-    MKLDNN_OPCHECK_RUN(PoolingGradCompute<cpu>, attrs, ctx, inputs, req,
-                       outputs);
+    MKLDNNPoolingGradCompute(ctx, param, out_grad, *in_data, workspace, req[0], in_grad, false);
+    MKLDNN_OPCHECK_RUN(PoolingGradCompute<cpu>, attrs, ctx, inputs, req, outputs);
     return;
   }
   FallBackCompute(PoolingGradCompute<cpu>, attrs, ctx, inputs, req, outputs);
