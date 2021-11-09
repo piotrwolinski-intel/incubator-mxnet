@@ -180,7 +180,7 @@ void AdaptiveAvgPoolOpBackwardExCPU(const nnvm::NodeAttrs& attrs,
 
   // Pooling does not currently support working with views
   if (inputs[0].IsView() || outputs[0].IsView()) {
-    FallBackCompute(PoolingGradCompute<cpu>, attrs, ctx, inputs, req, outputs);
+    FallBackCompute(AdaptiveAvgPoolOpBackward<cpu>, attrs, ctx, inputs, req, outputs);
     return;
   }
 
@@ -222,6 +222,7 @@ inline static bool BackwardPoolingStorageType(const nnvm::NodeAttrs& attrs,
       attrs, dev_mask, support_mkldnn_pool, dispatch_mode, in_attrs, out_attrs);
 }
 #endif
+
 template <typename xpu, typename DType, typename AccReal>
 void AdaptiveAvgPoolUpdateGradInput(mshadow::Stream<cpu>* s,
                                     const std::vector<TBlob>& input,
