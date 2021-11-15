@@ -180,7 +180,8 @@ void AdaptiveAvgPoolOpBackwardExCPU(const nnvm::NodeAttrs& attrs,
 
   // Pooling does not currently support working with views
   if (inputs[0].IsView() || outputs[0].IsView()) {
-    FallBackCompute(AdaptiveAvgPoolOpBackward<cpu>, attrs, ctx, inputs, req, outputs);
+    FallBackCompute(AdaptiveAvgPoolOpBackward<cpu>, attrs, ctx, inputs, req,
+                    outputs);
     return;
   }
 
@@ -370,24 +371,25 @@ NNVM_REGISTER_OP(_backward_contrib_AdaptiveAvgPooling2D)
     .set_num_inputs(1)
     .set_num_outputs(1)
     .set_attr<nnvm::TIsBackward>("TIsBackward", true)
-    .set_attr<nnvm::FInplaceOption>("FInplaceOption",
-                                    [](const NodeAttrs& attrs) {
+    .set_attr<nnvm::FInplaceOption>(
+        "FInplaceOption",
+        [](const NodeAttrs &attrs) {
 // Different backend requires different FInplaceOption
 #if MXNET_USE_MKLDNN == 1
-                                      const PoolingParam& param =
-                                          nnvm::get<PoolingParam>(attrs.parsed);
-                                      if (MKLDNNRequireWorkspace(param) &&
-                                          SupportMKLDNNPooling(param))
-                                        return std::vector<std::pair<int, int> >{{1, 0}};
+          const PoolingParam &param = nnvm::get<PoolingParam>(attrs.parsed);
+          if (MKLDNNRequireWorkspace(param) && SupportMKLDNNPooling(param))
+            return std::vector<std::pair<int, int>>{{1, 0}};
 #endif
-                                      return std::vector<std::pair<int, int> >();
-                                    })
+          return std::vector<std::pair<int, int>>();
+        })
 #if MXNET_USE_MKLDNN == 1
     .set_attr<FResourceRequest>("FResourceRequest",
-                                [](const NodeAttrs& n) {
-                                  return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
+                                [](const NodeAttrs &n) {
+                                  return std::vector<ResourceRequest>{
+                                      ResourceRequest::kTempSpace};
                                 })
-    .set_attr<FInferStorageType>("FInferStorageType", BackwardPoolingStorageType)
+    .set_attr<FInferStorageType>("FInferStorageType",
+                                 BackwardPoolingStorageType)
 #endif
     .set_attr_parser(ParamParser<PoolingParam>)
 #if MXNET_USE_MKLDNN == 1
