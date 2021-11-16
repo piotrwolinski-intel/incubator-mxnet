@@ -190,17 +190,28 @@ void InitPoolingPrimitiveParams(const PoolingParam& param,
 mkldnn::pooling_forward::primitive_desc GetPoolingFwdPdesc(const PoolingParam& param,
                                                            const bool is_train,
                                                            const mkldnn::memory::desc& data_md,
-                                                           const mkldnn::memory::desc& out_md) {
-  CHECK(param.kernel.ndim() == 1 || param.kernel.ndim() == 2 || param.kernel.ndim() == 3)
-      << "Not Implemented";
+                                                           const mkldnn::memory::desc& out_md,
+                                                           const bool use_adaptive_pooling) {
+  CHECK(param.kernel.ndim() >= 1 && param.kernel.ndim() <= 3) << "Not Implemented";
 
   const int kernel_ndims = param.kernel.ndim();
   mkldnn::memory::dims kernel(kernel_ndims);
   mkldnn::memory::dims strides(kernel_ndims);
   mkldnn::memory::dims pad_l(kernel_ndims);
   mkldnn::memory::dims pad_r(kernel_ndims);
+  if (use_adaptive_pooling) {
+    key.AddSign(use_adaptive_pooling);
+  }
 
-  InitPoolingPrimitiveParams(param, data_md, kernel, strides, pad_l, pad_r);
+  if (use_adaptive_pooling) {
+    UseAdaptivePaddingKernel(&kernel, &strides, &pad_l, &pad_r, data, output);
+    mkldnn::memory::validate_dims(kernel);
+    mkldnn::memory::validate_dims(strides);
+    mkldnn::memory::validate_dims(pad_l);
+    mkldnn::memory::validate_dims(pad_r);
+  } else {
+    InitPoolingPrimitiveParams(param, data_md, kernel, strides, pad_l, pad_r);
+  }
 
   const mkldnn::algorithm alg = GetMKLDNNPoolingAlgorithm(param);
   mkldnn::prop_kind kind      = mkldnn::prop_kind::forward_scoring;
@@ -289,10 +300,9 @@ const mkldnn::pooling_backward& MKLDNNPoolingBwd::GetBwd() {
   return *this->bwd;
 }
 
-MKLDNNPoolingBwd& GetPoolingBwd(const PoolingParam& param,
-                                const NDArray& in_data,
-                                const NDArray& in_grad,
-                                const NDArray& out_grad,
+MKLDNNPoolingBwd &GetPoolingBwd(const PoolingParam &param,
+                                const NDArray &in_data, const NDArray &in_grad,
+                                const NDArray &out_grad,
                                 const bool use_adaptive_pooling) {
 #if DMLC_CXX11_THREAD_LOCAL
   static thread_local std::unordered_map<MKLDNNPoolingSignature, MKLDNNPoolingBwd, OpHash>
@@ -308,6 +318,10 @@ MKLDNNPoolingBwd& GetPoolingBwd(const PoolingParam& param,
   key.AddSign(in_grad);
   key.AddSign(out_grad);
 
+  if (use_adaptive_pooling) {
+    key.AddSign(use_adaptive_pooling);
+  }
+
   auto it = pooling_bwds.find(key);
   if (it == pooling_bwds.end()) {
     auto input_mem = static_cast<const mkldnn::memory*>(in_data.GetMKLDNNData());
@@ -318,7 +332,7 @@ MKLDNNPoolingBwd& GetPoolingBwd(const PoolingParam& param,
     auto dst_md   = mkldnn::memory::desc(dst_dims, get_data_type(data_md), any);
 
     // fwd hint
-    auto fwd_pd = GetPoolingFwdPdesc(param, true, data_md, dst_md);
+    auto fwd_pd = GetPoolingFwdPdesc(param, true, data_md, dst_md, use_adaptive_pooling);
 
     // creat bwd desc
     auto diff_src_dims = mkldnn::memory::dims(in_grad.shape().begin(), in_grad.shape().end());
@@ -333,7 +347,7 @@ MKLDNNPoolingBwd& GetPoolingBwd(const PoolingParam& param,
     mkldnn::memory::dims pad_r(kernel_ndims);
 
     if (use_adaptive_pooling) {
-      UseAdaptivePaddingKernel(&kernel, &strides, &pad_l, &pad_r, in_data, out_grad); // check if last two arguments are correct
+      UseAdaptivePaddingKernel(&kernel, &strides, &pad_l, &pad_r, in_data, out_grad);
       mkldnn::memory::validate_dims(kernel);
       mkldnn::memory::validate_dims(strides);
       mkldnn::memory::validate_dims(pad_l);
