@@ -371,32 +371,31 @@ NNVM_REGISTER_OP(_backward_contrib_AdaptiveAvgPooling2D)
     .set_num_inputs(1)
     .set_num_outputs(1)
     .set_attr<nnvm::TIsBackward>("TIsBackward", true)
-    .set_attr<nnvm::FInplaceOption>(
-        "FInplaceOption",
-        [](const NodeAttrs &attrs) {
-// Different backend requires different FInplaceOption
+    .set_attr<FCompute>("FCompute<cpu>", AdaptiveAvgPoolOpBackward<cpu>)
 #if MXNET_USE_MKLDNN == 1
-          const PoolingParam &param = nnvm::get<PoolingParam>(attrs.parsed);
-          if (MKLDNNRequireWorkspace(param) && SupportMKLDNNPooling(param))
-            return std::vector<std::pair<int, int>>{{1, 0}};
-#endif
-          return std::vector<std::pair<int, int>>();
-        })
-#if MXNET_USE_MKLDNN == 1
+    // Different backend requires different FInplaceOption
+    .set_attr<nnvm::FInplaceOption>("FInplaceOption",
+                                    [](const NodeAttrs& attrs) {
+                                      const PoolingParam& param =
+                                          nnvm::get<PoolingParam>(attrs.parsed);
+                                      if (MKLDNNRequireWorkspace(param) &&
+                                          SupportMKLDNNPooling(param))
+                                        return std::vector<std::pair<int, int>>{{1, 0}};
+                                    })
     .set_attr<FResourceRequest>("FResourceRequest",
-                                [](const NodeAttrs &n) {
-                                  return std::vector<ResourceRequest>{
-                                      ResourceRequest::kTempSpace};
+                                [](const NodeAttrs& n) {
+                                  return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
                                 })
-    .set_attr<FInferStorageType>("FInferStorageType",
-                                 BackwardPoolingStorageType)
-#endif
-    .set_attr_parser(ParamParser<PoolingParam>)
-#if MXNET_USE_MKLDNN == 1
+    .set_attr<FInferStorageType>("FInferStorageType", BackwardPoolingStorageType)
     .set_attr<bool>("TIsMKLDNN", true)
     .set_attr<FComputeEx>("FComputeEx<cpu>", AdaptiveAvgPoolOpBackwardExCPU)
+#else
+    .set_attr<nnvm::FInplaceOption>("FInplaceOption",
+                                    [](const NodeAttrs& attrs) {
+                                      return std::vector<std::pair<int, int>>();
+                                    })
 #endif
-    .set_attr<FCompute>("FCompute<cpu>", AdaptiveAvgPoolOpBackward<cpu>);
+    .set_attr_parser(ParamParser<PoolingParam>);
 
 }  // namespace op
 }  // namespace mxnet
