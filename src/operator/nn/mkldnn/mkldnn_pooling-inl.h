@@ -92,12 +92,16 @@ void UseAdaptivePaddingKernel(T* kernel,
                               T* strides,
                               T* pad_l,
                               T* pad_r,
-                              const NDArray& in_data,
-                              const NDArray& out_data) {
-  const int IH = in_data.shape()[2];
-  const int IW = in_data.shape()[3];
-  const int OH = out_data.shape()[2];
-  const int OW = out_data.shape()[3];
+                              const mkldnn::memory::desc& input_md,
+                              const mkldnn::memory::desc& output_md) {
+
+  const mxnet::TShape input_shape = mxnet::TShape(input_md.dims());
+  const mxnet::TShape output_shape = mxnet::TShape(output_md.dims());
+
+  const int IH = input_shape[2];
+  const int IW = input_shape[3];
+  const int OH = output_shape[2];
+  const int OW = output_shape[3];
 
   strides->at(0) = floor((IH << 1) / OH) - floor(IH / OH);
   strides->at(1) = floor((IW << 1) / OW) - floor(IW / OW);
