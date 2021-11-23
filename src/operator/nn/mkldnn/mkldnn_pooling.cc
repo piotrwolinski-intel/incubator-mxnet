@@ -194,18 +194,19 @@ mkldnn::pooling_forward::primitive_desc GetPoolingFwdPdesc(const PoolingParam& p
                                                            const bool use_adaptive_pooling) {
   CHECK(param.kernel.ndim() >= 1 && param.kernel.ndim() <= 3) << "Not Implemented";
 
+  const Context ctx = Context();
+
+  const NDArray &out = NDArray(mxnet::TShape(out_md.dims()), ctx);
+  const NDArray &data = NDArray(mxnet::TShape(data_md.dims()), ctx);
+
   const int kernel_ndims = param.kernel.ndim();
   mkldnn::memory::dims kernel(kernel_ndims);
   mkldnn::memory::dims strides(kernel_ndims);
   mkldnn::memory::dims pad_l(kernel_ndims);
   mkldnn::memory::dims pad_r(kernel_ndims);
-  if (use_adaptive_pooling) {
-    key.AddSign(use_adaptive_pooling);
-  }
 
   if (use_adaptive_pooling) {
-    UseAdaptivePaddingKernel(&kernel, &strides, &pad_l, &pad_r, data, output);
-    mkldnn::memory::validate_dims(kernel);
+    UseAdaptivePaddingKernel(&kernel, &strides, &pad_l, &pad_r, data, out);
     mkldnn::memory::validate_dims(strides);
     mkldnn::memory::validate_dims(pad_l);
     mkldnn::memory::validate_dims(pad_r);
@@ -301,7 +302,8 @@ const mkldnn::pooling_backward& MKLDNNPoolingBwd::GetBwd() {
 }
 
 MKLDNNPoolingBwd &GetPoolingBwd(const PoolingParam &param,
-                                const NDArray &in_data, const NDArray &in_grad,
+                                const NDArray &in_data,
+                                const NDArray &in_grad,
                                 const NDArray &out_grad,
                                 const bool use_adaptive_pooling) {
 #if DMLC_CXX11_THREAD_LOCAL
