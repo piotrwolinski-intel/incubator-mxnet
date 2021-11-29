@@ -92,11 +92,8 @@ void UseAdaptivePaddingKernel(T* kernel,
                               T* strides,
                               T* pad_l,
                               T* pad_r,
-                              const mkldnn::memory::desc& input_md,
-                              const mkldnn::memory::desc& output_md) {
-
-  const mxnet::TShape input_shape = mxnet::TShape(input_md.dims());
-  const mxnet::TShape output_shape = mxnet::TShape(output_md.dims());
+                              const mxnet::TShape& input_shape,
+                              const mxnet::TShape& output_shape) {
 
   const int IH = input_shape[2];
   const int IW = input_shape[3];
@@ -177,13 +174,6 @@ inline bool MKLDNNRequireWorkspace(const PoolingParam& param) {
 }
 
 typedef ParamOpSign<PoolingParam> MKLDNNPoolingSignature;
-void MKLDNNPoolingCompute(const OpContext& ctx,
-                          const PoolingParam& param,
-                          const NDArray& in_data,
-                          const OpReqType req,
-                          const NDArray& out_data,
-                          const NDArray* workspace,
-                          const bool use_adaptive_pooling);
 
 void MKLDNNPoolingGradCompute(const OpContext& ctx,
                               const PoolingParam& param,
@@ -199,6 +189,18 @@ MKLDNNPoolingFwd& GetPoolingFwd(const PoolingParam& param,
                                 const NDArray& data,
                                 const NDArray& output,
                                 const bool use_adaptive_pooling);
+
+template <bool use_adaptive_pooling>
+void MKLDNNPoolingCompute(const nnvm::NodeAttrs& attrs,
+                          const OpContext& ctx,
+                          const std::vector<NDArray>& in_data,
+                          const std::vector<OpReqType>& req,
+                          const std::vector<NDArray>& out_data) {
+  const PoolingParam& param = nnvm::get<PoolingParam>(attrs.parsed);
+  auto& fwd = GetPoolingFwd(param, ctx.is_train, in_data[0], out_data[0], use_adaptive_pooling);
+  fwd.Execute(in_data[0], req[0], out_data[0], nullptr);
+}
+
 }  // namespace op
 }  // namespace mxnet
 #endif  // MXNET_USE_MKLDNN == 1

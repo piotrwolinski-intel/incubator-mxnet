@@ -288,7 +288,7 @@ void PoolingComputeExCPU(const nnvm::NodeAttrs &attrs,
       workspace = &outputs[1];
     }
     MKLDNN_OPCHECK_INIT(false, 1, inputs, outputs);
-    MKLDNNPoolingCompute(ctx, param, inputs[0], req[0], outputs[0], workspace, false);
+    MKLDNNRun(MKLDNNPoolingCompute<false>, attrs, ctx, inputs, req, outputs);
     MKLDNN_OPCHECK_RUN(PoolingCompute<cpu>, attrs, ctx, inputs, req, outputs);
     return;
   }

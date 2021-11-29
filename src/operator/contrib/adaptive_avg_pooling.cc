@@ -291,17 +291,14 @@ void AdaptiveAvgPoolComputeExCPU(const nnvm::NodeAttrs &attrs,
   CHECK_EQ(inputs.size(), 1U);
   CHECK_EQ(outputs.size(), 1U);
   /*
-  OneDNN doesn't support adaptive pooling. 
+  oneDNN doesn't support adaptive pooling. 
   Fallback is needed when padding is not equal 0;
   */
-  if (SupportMKLDNN(inputs[0]) &&
-      SupportMKLDNNAveragePooling(inputs[0], outputs[0])) {
-
-    const PoolingParam &param = nnvm::get<PoolingParam>(attrs.parsed);
-
+  if (SupportMKLDNN(inputs[0]) && SupportMKLDNNAveragePooling(inputs[0], outputs[0])) {
+        
     const NDArray *workspace = nullptr;
     MKLDNN_OPCHECK_INIT(false, 1, inputs, outputs);
-    MKLDNNPoolingCompute(ctx, param, inputs[0], req[0], outputs[0], workspace, true);
+    MKLDNNRun(MKLDNNPoolingCompute<true>, attrs, ctx, inputs, req, outputs);
     MKLDNN_OPCHECK_RUN(PoolingCompute<cpu>, attrs, ctx, inputs, req, outputs);
     return;
   }

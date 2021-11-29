@@ -200,8 +200,11 @@ mkldnn::pooling_forward::primitive_desc GetPoolingFwdPdesc(const PoolingParam& p
   mkldnn::memory::dims pad_l(kernel_ndims);
   mkldnn::memory::dims pad_r(kernel_ndims);
 
+  const mxnet::TShape input_shape  = mxnet::TShape(data_md.dims());
+  const mxnet::TShape output_shape = mxnet::TShape(out_md.dims());
+
   if (use_adaptive_pooling) {
-    UseAdaptivePaddingKernel(&kernel, &strides, &pad_l, &pad_r, data_md, out_md);
+    UseAdaptivePaddingKernel(&kernel, &strides, &pad_l, &pad_r, input_shape, output_shape);
     mkldnn::memory::validate_dims(strides);
     mkldnn::memory::validate_dims(pad_l);
     mkldnn::memory::validate_dims(pad_r);
@@ -233,11 +236,6 @@ MKLDNNPoolingFwd& GetPoolingFwd(const PoolingParam& param,
       pooling_fwds;
 #endif
 
-  auto input_mem = static_cast<const mkldnn::memory*>(data.GetMKLDNNData());
-  auto output_mem = static_cast<const mkldnn::memory*>(output.GetMKLDNNData());
-  const mkldnn::memory::desc data_md = input_mem->get_desc();
-  const mkldnn::memory::desc out_md = output_mem->get_desc();
-
   const bool with_workspace = is_train && MKLDNNRequireWorkspace(param);
   MKLDNNPoolingSignature key(param);
   key.AddSign(is_train);
@@ -261,7 +259,7 @@ MKLDNNPoolingFwd& GetPoolingFwd(const PoolingParam& param,
     mkldnn::memory::dims pad_r(kernel_ndims);
 
     if (use_adaptive_pooling) {
-      UseAdaptivePaddingKernel(&kernel, &strides, &pad_l, &pad_r, data_md, out_md);
+      UseAdaptivePaddingKernel(&kernel, &strides, &pad_l, &pad_r, data.shape(), output.shape());
       mkldnn::memory::validate_dims(kernel);
       mkldnn::memory::validate_dims(strides);
       mkldnn::memory::validate_dims(pad_l);
@@ -280,16 +278,6 @@ MKLDNNPoolingFwd& GetPoolingFwd(const PoolingParam& param,
   return it->second;
 }
 
-void MKLDNNPoolingCompute(const OpContext& ctx,
-                          const PoolingParam& param,
-                          const NDArray& in_data,
-                          const OpReqType req,
-                          const NDArray& out_data,
-                          const NDArray* workspace,
-                          const bool use_adaptive_pooling) {
-  auto& fwd = GetPoolingFwd(param, ctx.is_train, in_data, out_data, use_adaptive_pooling);
-  fwd.Execute(in_data, req, out_data, workspace);
-}
 
 MKLDNNPoolingBwd::MKLDNNPoolingBwd(const mkldnn::pooling_backward::primitive_desc& pdesc,
                                    bool with_ws)
@@ -327,9 +315,7 @@ MKLDNNPoolingBwd &GetPoolingBwd(const PoolingParam &param,
   auto it = pooling_bwds.find(key);
   if (it == pooling_bwds.end()) {
     auto input_mem = static_cast<const mkldnn::memory*>(in_data.GetMKLDNNData());
-    auto output_mem = static_cast<const mkldnn::memory*>(out_grad.GetMKLDNNData());
     const mkldnn::memory::desc data_md = input_mem->get_desc();
-    const mkldnn::memory::desc out_md = output_mem->get_desc();
 
     auto dst_dims = mkldnn::memory::dims(out_grad.shape().begin(), out_grad.shape().end());
     auto any      = mkldnn::memory::format_tag::any;
@@ -351,7 +337,7 @@ MKLDNNPoolingBwd &GetPoolingBwd(const PoolingParam &param,
     mkldnn::memory::dims pad_r(kernel_ndims);
 
     if (use_adaptive_pooling) {
-      UseAdaptivePaddingKernel(&kernel, &strides, &pad_l, &pad_r, data_md, out_md);
+      UseAdaptivePaddingKernel(&kernel, &strides, &pad_l, &pad_r, in_data.shape(), out_grad.shape());
       mkldnn::memory::validate_dims(kernel);
       mkldnn::memory::validate_dims(strides);
       mkldnn::memory::validate_dims(pad_l);
