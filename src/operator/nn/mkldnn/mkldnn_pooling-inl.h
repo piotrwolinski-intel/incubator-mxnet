@@ -197,8 +197,13 @@ void MKLDNNPoolingCompute(const nnvm::NodeAttrs& attrs,
                           const std::vector<OpReqType>& req,
                           const std::vector<NDArray>& out_data) {
   const PoolingParam& param = nnvm::get<PoolingParam>(attrs.parsed);
+  const NDArray* workspace = nullptr;
+  if (MKLDNNRequireWorkspace(param)) {
+    CHECK_GT(out_data.size(), 1U);
+    workspace = &out_data[1];
+  }
   auto& fwd = GetPoolingFwd(param, ctx.is_train, in_data[0], out_data[0], use_adaptive_pooling);
-  fwd.Execute(in_data[0], req[0], out_data[0], nullptr);
+  fwd.Execute(in_data[0], req[0], out_data[0], workspace);
 }
 
 }  // namespace op

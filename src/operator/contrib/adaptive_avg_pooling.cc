@@ -295,8 +295,6 @@ void AdaptiveAvgPoolComputeExCPU(const nnvm::NodeAttrs &attrs,
   Fallback is needed when padding is not equal 0;
   */
   if (SupportMKLDNN(inputs[0]) && SupportMKLDNNAveragePooling(inputs[0], outputs[0])) {
-        
-    const NDArray *workspace = nullptr;
     MKLDNN_OPCHECK_INIT(false, 1, inputs, outputs);
     MKLDNNRun(MKLDNNPoolingCompute<true>, attrs, ctx, inputs, req, outputs);
     MKLDNN_OPCHECK_RUN(PoolingCompute<cpu>, attrs, ctx, inputs, req, outputs);

@@ -274,7 +274,6 @@ void PoolingComputeExCPU(const nnvm::NodeAttrs &attrs,
                          const std::vector<OpReqType> &req,
                          const std::vector<NDArray> &outputs) {
   const PoolingParam &param = nnvm::get<PoolingParam>(attrs.parsed);
-  const NDArray *workspace = nullptr;
 
   // Pooling does not currently support working with views
   if (inputs[0].IsView() || outputs[0].IsView()) {
@@ -283,10 +282,6 @@ void PoolingComputeExCPU(const nnvm::NodeAttrs &attrs,
   }
 
   if (SupportMKLDNNPooling(param, inputs[0])) {
-    if (MKLDNNRequireWorkspace(param)) {
-      CHECK_GT(outputs.size(), 1U);
-      workspace = &outputs[1];
-    }
     MKLDNN_OPCHECK_INIT(false, 1, inputs, outputs);
     MKLDNNRun(MKLDNNPoolingCompute<false>, attrs, ctx, inputs, req, outputs);
     MKLDNN_OPCHECK_RUN(PoolingCompute<cpu>, attrs, ctx, inputs, req, outputs);
