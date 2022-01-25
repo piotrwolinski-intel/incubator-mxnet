@@ -620,12 +620,13 @@ class Block:
                     syms, out = blk._cached_graph
                     mdl_syms = []
                     for sym in syms:
-                        mdl_syms.append(sym.tojson())
+                        mdl_syms.append(json.loads(sym.tojson()))
                     mdl['inputs'] = mdl_syms
-                    mdl['symbol'] = out.tojson()
+                    mdl['symbol'] = json.loads(out.tojson())
                     mdl['hybridized'] = True
                 else:
                     mdl['hybridized'] = False
+
             # save param uuids
             pmap = {}
             mdl['params'] = pmap
@@ -641,9 +642,12 @@ class Block:
 
         # save top-level block
         _save_cached_graphs(self, model)
+
+        json_object = json.dumps(model, indent=2)
         # save model
         with open(prefix+'-model.json', 'w') as fp:
-            json.dump(model, fp)
+            fp.write(json_object)
+
         # save params
         self.save_parameters('MyModel-model.params')
 
