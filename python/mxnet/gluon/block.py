@@ -644,6 +644,7 @@ class Block:
         _save_cached_graphs(self, model)
 
         json_object = json.dumps(model, indent=2)
+        
         # save model
         with open(prefix+'-model.json', 'w') as fp:
             fp.write(json_object)
