@@ -145,10 +145,10 @@ static MKLDNNBNForward &GetBNForward(const BatchNormParam& param,
   return it->second;
 }
 
-template <typename DType>
+template <typename DType, bool fuse_relu>
 void MKLDNNBatchNormForward(const nnvm::NodeAttrs &attrs, const OpContext &ctx,
                             const std::vector<NDArray> &inputs, const std::vector<OpReqType> &req,
-                            const std::vector<NDArray> &outputs, bool fuse_relu) {
+                            const std::vector<NDArray> &outputs) {
   const BatchNormParam &param = nnvm::get<BatchNormParam>(attrs.parsed);
   std::vector<NDArray> in_data(inputs.begin(), inputs.begin() + batchnorm::kInMovingMean);
 
