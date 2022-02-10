@@ -475,7 +475,7 @@ void BatchNormGradComputeExCPU(const nnvm::NodeAttrs &attrs,
 
   if (SupportMKLDNNBN(inputs[0], param)) {
       MKLDNN_OPCHECK_INIT(true, outputs.size(), inputs, outputs);
-      MKLDNNRun(MKLDNNBatchNormForward<float, /*fuse_relu*/ false>, attrs, ctx,
+      MKLDNNRun(MKLDNNBatchNormBackward<float, /*fuse_relu*/ false>, attrs, ctx,
                 inputs, req, outputs);
       MKLDNN_OPCHECK_RUN(BatchNormGradCompute<cpu>, attrs, ctx, inputs, req, outputs);
       return;

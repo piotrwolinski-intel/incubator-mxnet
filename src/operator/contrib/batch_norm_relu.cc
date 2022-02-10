@@ -162,7 +162,7 @@ void BatchNormWithReLUGradComputeExCPU(const nnvm::NodeAttrs &attrs,
   if (SupportMKLDNNBNReLU(inputs[0], param)) {
       CHECK_EQ(inputs.size(), 9U);
       MKLDNN_OPCHECK_INIT(true, outputs.size(), inputs, outputs);
-      MKLDNNRun(MKLDNNBatchNormForward<float, /*fuse_relu*/ true>, attrs, ctx,
+      MKLDNNRun(MKLDNNBatchNormBackward<float, /*fuse_relu*/ true>, attrs, ctx,
                 inputs, req, outputs);
       return;
   }
