@@ -274,6 +274,7 @@ void MKLDNNBatchNormForward(const nnvm::NodeAttrs &attrs, const OpContext &ctx,
   MKLDNNBatchNormForwardImpl<DType>(attrs, ctx, inputs, req, outputs,
                                     fuse_relu);
 }
+
 class MKLDNNBNBackward {
   std::shared_ptr<mkldnn::batch_normalization_backward> bwd;
   const std::shared_ptr<mkldnn::memory> weight_m;
@@ -500,7 +501,6 @@ void MKLDNNBatchNormBackward(const nnvm::NodeAttrs &attrs, const OpContext &ctx,
   MKLDNNBatchNormBackwardImpl<DType>(attrs, ctx, inputs, req, outputs,
                                      fuse_relu);
 }
-
 }  // namespace op
 }  // namespace mxnet
 #endif  // MXNET_USE_MKLDNN
